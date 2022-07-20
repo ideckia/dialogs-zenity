@@ -19,25 +19,14 @@ enum abstract WindowIcon(String) to String {
 	var password;
 }
 
-typedef Options = {
-	var ?height:UInt;
-	var ?width:UInt;
-	var ?windowIcon:WindowIcon;
-	var ?dialogIcon:String;
-	var ?okLabel:String;
-	var ?cancelLabel:String;
-	var ?parent:Any;
-}
-
 @:expose('Dialog')
 class Zenity implements Dialog {
 	static var executablePath:String;
 
-	var defaultOptions:Options;
-	var options:Options;
+	var defaultOptions:WindowOptions;
 
 	public function new() {
-		var exceptionMessage = 'Download "zenity" and put it in the lib folder, please. You can get it here: https://github.com/ncruces/zenity';
+		var exceptionMessage = 'To use dialogs you must download "zenity" and put it in the lib folder. You can get it here: https://github.com/ncruces/zenity';
 		function checkInstalation() {
 			trace('Checking zenity is installed.');
 			var status = Sys.command(executablePath, ['--version']);
@@ -53,51 +42,53 @@ class Zenity implements Dialog {
 				filename = 'zenity.exe';
 			default:
 				executablePath = 'zenity';
-				exceptionMessage = 'Download "zenity" from your package manager, please.';
+				exceptionMessage = 'To use dialogs you must download "zenity" from your package manager.';
 				checkInstalation();
 				return;
 		}
 
 		executablePath = haxe.io.Path.join([js.Node.__dirname, 'lib', filename]);
 		checkInstalation();
-		defaultOptions = {
+		setDefaultOptions({
 			height: 200,
 			width: 300,
-			windowIcon: WindowIcon.info,
+			windowIcon: '',
 			dialogIcon: '',
-			parent: null
-		};
-		options = defaultOptions;
-	}
-
-	public function setOptions(newOptions:Any) {
-		if (newOptions == null)
-			newOptions = defaultOptions;
-
-		Macros.assign(Options, options, cast newOptions);
-	}
-
-	public function notify(title:String, text:String) {
-		runZenity(buildBaseArgs('notification', title, text));
-	}
-
-	public function info(title:String, text:String) {
-		runZenity(buildBaseArgs('info', title, text));
-	}
-
-	public function error(title:String, text:String) {
-		runZenity(buildBaseArgs('error', title, text));
-	}
-
-	public function question(title:String, text:String) {
-		return new js.lib.Promise<Bool>((resolve, reject) -> {
-			runZenity(buildBaseArgs('question', title, text)).then(response -> resolve(response == OK)).catchError(reject);
+			extraData: null
 		});
 	}
 
-	public function selectFile(title:String, isDirectory:Bool = false, multiple:Bool = false, ?fileFilter:FileFilter):js.lib.Promise<Array<String>> {
+	public function setDefaultOptions(newOptions:WindowOptions) {
+		defaultOptions = newOptions;
+	}
+
+	public function notify(title:String, text:String, ?options:WindowOptions) {
+		runZenity(buildBaseArgs('notification', title, text, setDefaultWindowIcon(options, WindowIcon.info)));
+	}
+
+	public function info(title:String, text:String, ?options:WindowOptions) {
+		runZenity(buildBaseArgs('info', title, text, setDefaultWindowIcon(options, WindowIcon.info)));
+	}
+
+	public function warning(title:String, text:String, ?options:WindowOptions) {
+		runZenity(buildBaseArgs('warning', title, text, setDefaultWindowIcon(options, WindowIcon.warning)));
+	}
+
+	public function error(title:String, text:String, ?options:WindowOptions) {
+		runZenity(buildBaseArgs('error', title, text, setDefaultWindowIcon(options, WindowIcon.error)));
+	}
+
+	public function question(title:String, text:String, ?options:WindowOptions) {
+		return new js.lib.Promise<Bool>((resolve, reject) -> {
+			runZenity(buildBaseArgs('question', title, text,
+				setDefaultWindowIcon(options, WindowIcon.question))).then(response -> resolve(response == OK)).catchError(reject);
+		});
+	}
+
+	public function selectFile(title:String, isDirectory:Bool = false, multiple:Bool = false, ?fileFilter:FileFilter,
+			?options:WindowOptions):js.lib.Promise<Array<String>> {
 		return new js.lib.Promise<Array<String>>((resolve, reject) -> {
-			var args = buildBaseArgs('file-selection', title, '');
+			var args = buildBaseArgs('file-selection', title, '', options);
 			if (isDirectory)
 				args.push('--directory');
 			if (multiple != null && multiple)
@@ -106,8 +97,8 @@ class Zenity implements Dialog {
 		});
 	}
 
-	public function saveFile(title:String, ?saveName:String, ?fileFilter:FileFilter):js.lib.Promise<String> {
-		var args = buildBaseArgs('file-selection', title, '');
+	public function saveFile(title:String, ?saveName:String, ?fileFilter:FileFilter, ?options:WindowOptions):js.lib.Promise<String> {
+		var args = buildBaseArgs('file-selection', title, '', options);
 		args.push('--save');
 		args.push('-confirm-overwrite');
 		if (saveName != null)
@@ -120,24 +111,24 @@ class Zenity implements Dialog {
 		return runZenity(args);
 	}
 
-	public function entry(title:String, text:String, ?placeholder:String):js.lib.Promise<String> {
-		var args = buildBaseArgs('entry', title, text);
+	public function entry(title:String, text:String, ?placeholder:String, ?options:WindowOptions):js.lib.Promise<String> {
+		var args = buildBaseArgs('entry', title, text, options);
 		if (placeholder != null)
 			args.push('--entry-text=${placeholder}');
 		return runZenity(args);
 	}
 
-	public function password(title:String, text:String, showUsername:Bool = false):api.IdeckiaApi.Promise<Array<String>> {
+	public function password(title:String, text:String, showUsername:Bool = false, ?options:WindowOptions):api.IdeckiaApi.Promise<Array<String>> {
 		return new js.lib.Promise<Array<String>>((resolve, reject) -> {
-			var args = buildBaseArgs('password', title, text);
+			var args = buildBaseArgs('password', title, text, setDefaultWindowIcon(options, WindowIcon.password));
 			if (showUsername)
 				args.push('--username');
 			runZenity(args).then(response -> resolve(responseToArray(response))).catchError(reject);
 		});
 	}
 
-	public function progress(title:String, text:String, pulsate:Bool = false, autoClose:Bool = true):Progress {
-		var args = buildBaseArgs('progress', title, text);
+	public function progress(title:String, text:String, pulsate:Bool = false, autoClose:Bool = true, ?options:WindowOptions):Progress {
+		var args = buildBaseArgs('progress', title, text, options);
 		if (autoClose)
 			args.push('--auto-close');
 		if (pulsate)
@@ -145,9 +136,9 @@ class Zenity implements Dialog {
 		return new ZenityProgress(args);
 	}
 
-	public function color(title:String, initialColor:String = "#FFFFFF", palette:Bool = false):js.lib.Promise<Color> {
+	public function color(title:String, initialColor:String = "#FFFFFF", palette:Bool = false, ?options:WindowOptions):js.lib.Promise<Color> {
 		return new js.lib.Promise<Color>((resolve, reject) -> {
-			var args = buildBaseArgs('color-selection', title, '');
+			var args = buildBaseArgs('color-selection', title, '', options);
 			args.push('--color=$initialColor');
 			if (palette)
 				args.push('--show-palette');
@@ -155,8 +146,9 @@ class Zenity implements Dialog {
 		});
 	}
 
-	public function calendar(title:String, text:String, ?year:UInt, ?month:UInt, ?day:UInt, ?dateFormat:String):js.lib.Promise<String> {
-		var args = buildBaseArgs('calendar', title, text);
+	public function calendar(title:String, text:String, ?year:UInt, ?month:UInt, ?day:UInt, ?dateFormat:String,
+			?options:WindowOptions):js.lib.Promise<String> {
+		var args = buildBaseArgs('calendar', title, text, options);
 		if (year != null)
 			args.push('--year=$year');
 		if (month != null)
@@ -169,9 +161,10 @@ class Zenity implements Dialog {
 		return runZenity(args);
 	}
 
-	public function list(title:String, text:String, columnHeader:String, values:Array<String>, multiple:Bool = false):js.lib.Promise<Array<String>> {
+	public function list(title:String, text:String, columnHeader:String, values:Array<String>, multiple:Bool = false,
+			?options:WindowOptions):js.lib.Promise<Array<String>> {
 		return new js.lib.Promise<Array<String>>((resolve, reject) -> {
-			var args = buildBaseArgs('list', title, text);
+			var args = buildBaseArgs('list', title, text, options);
 			if (multiple)
 				args.push('--multiple');
 			args.push('--column="$columnHeader" ${values.map(v -> '"$v"').join(' ')}');
@@ -202,28 +195,41 @@ class Zenity implements Dialog {
 		});
 	}
 
-	function buildBaseArgs(type:String, title:String, text:String, ?options:Options) {
-		return ['--$type', '--title="$title"', '--text="$text"'].concat(buildWindowOptionArgs());
+	function buildBaseArgs(type:String, title:String, text:String, ?options:WindowOptions) {
+		return ['--$type', '--title="$title"', '--text="$text"'].concat(buildWindowOptionArgs(options));
 	}
 
-	function buildWindowOptionArgs() {
-		var args = [];
-
-		args = args.concat(writeArgument('height', options.height))
-			.concat(writeArgument('width', options.width))
-			.concat(writeArgument('window-icon', options.windowIcon))
-			.concat(writeArgument('icon-name', options.dialogIcon))
-			.concat(writeArgument('ok-label', options.okLabel))
-			.concat(writeArgument('cancel-label', options.cancelLabel))
-			.concat(writeArgument('attach', options.parent));
-
-		return args;
+	function buildWindowOptionArgs(?options:WindowOptions) {
+		return [].concat(writeArgument('height', options, 'height'))
+			.concat(writeArgument('width', options, 'width'))
+			.concat(writeArgument('window-icon', options, 'windowIcon'))
+			.concat(writeArgument('icon-name', options, 'dialogIcon'))
+			.concat(writeArgument('ok-label', options, 'okLabel'))
+			.concat(writeArgument('cancel-label', options, 'cancelLabel'));
 	}
 
-	function writeArgument(argumentName:String, value:Any) {
-		if (value == null)
+	function writeArgument(argumentName:String, options:WindowOptions, fieldName:String) {
+		var value = Reflect.field(options, fieldName);
+		var defValue = Reflect.field(defaultOptions, fieldName);
+		inline function isBlank(s:String)
+			return s == null || StringTools.trim(s) == '';
+		if (isBlank(value) && isBlank(defValue))
 			return [];
-		return ['--$argumentName=$value'];
+		else if (isBlank(value))
+			return ['--$argumentName=$defValue'];
+		else
+			return ['--$argumentName=$value'];
+	}
+
+	function setDefaultWindowIcon(?options:WindowOptions, defaultIcon:WindowIcon):WindowOptions {
+		if (options == null)
+			return {windowIcon: defaultIcon};
+
+		// If it is null, this will not override with default. We assume that the user wants to be empty
+		if (options.windowIcon == '')
+			options.windowIcon = defaultIcon;
+
+		return options;
 	}
 
 	function cleanResponse(response:String) {
