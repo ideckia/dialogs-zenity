@@ -2,8 +2,8 @@ package;
 
 import haxe.Exception;
 
-using api.dialog.Dialog;
-using api.dialog.Dialog.Progress;
+using api.dialog.IDialog;
+using api.dialog.IDialog.Progress;
 using api.dialog.DialogTypes;
 
 enum abstract QuestionResponse(String) to String {
@@ -20,7 +20,7 @@ enum abstract WindowIcon(String) to String {
 }
 
 @:expose('Dialog')
-class Zenity implements Dialog {
+class Zenity implements IDialog {
 	static var executablePath:String;
 
 	var defaultOptions:WindowOptions;
@@ -200,15 +200,15 @@ class Zenity implements Dialog {
 	}
 
 	function buildWindowOptionArgs(?options:WindowOptions) {
-		return [].concat(writeArgument('height', options, 'height'))
-			.concat(writeArgument('width', options, 'width'))
-			.concat(writeArgument('window-icon', options, 'windowIcon'))
-			.concat(writeArgument('icon-name', options, 'dialogIcon'))
-			.concat(writeArgument('ok-label', options, 'okLabel'))
-			.concat(writeArgument('cancel-label', options, 'cancelLabel'));
+		return [].concat(writeArgument(options, 'height', 'height'))
+			.concat(writeArgument(options, 'width', 'width'))
+			.concat(writeArgument(options, 'window-icon', 'windowIcon'))
+			.concat(writeArgument(options, 'icon-name', 'dialogIcon'))
+			.concat(writeArgument(options, 'ok-label', 'okLabel'))
+			.concat(writeArgument(options, 'cancel-label', 'cancelLabel'));
 	}
 
-	function writeArgument(argumentName:String, options:WindowOptions, fieldName:String) {
+	function writeArgument(options:WindowOptions, argumentName:String, fieldName:String) {
 		var value = Reflect.field(options, fieldName);
 		var defValue = Reflect.field(defaultOptions, fieldName);
 		inline function isBlank(s:String)
