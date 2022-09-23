@@ -19,7 +19,6 @@ enum abstract WindowIcon(String) to String {
 	var password;
 }
 
-@:expose('Dialog')
 class Zenity implements IDialog {
 	static var executablePath:String;
 
